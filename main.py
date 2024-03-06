@@ -24,17 +24,29 @@ def get_spark_context(on_server: bool) -> SparkContext:
         #  log level to anything below WARN, Spark will print too much information.
         spark_context.setLogLevel("ERROR")
 
+    spark_context.setLogLevel("ERROR") #Delete
+
     return spark_context
 
 
 def q0a(spark_context: SparkContext, on_server: bool) -> DataFrame:
     plays_file_path = "/plays.txt" if on_server else "plays.txt"
 
-    spark_session = SparkSession(spark_context)
+    spark_session = SparkSession.builder.config(conf=spark_context.getConf()).getOrCreate()
 
     # TODO: Implement Q0a here by creating a Dataset of DataFrame out of the file at {@code plays_file_path}.
+    from pyspark.sql.functions import split, col
 
-    return spark_session.read.text(plays_file_path)
+    raw_data = spark_session.read.text(plays_file_path)
+
+    # Split the column into userId, songId, and rating
+    df = raw_data.select(
+        split(col("value"), ",").getItem(0).cast("int").alias("userId"),
+        split(col("value"), ",").getItem(1).cast("int").alias("songId"),
+        split(col("value"), ",").getItem(2).cast("double").alias("rating")
+    )
+
+    return df
 
 
 def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
@@ -47,7 +59,19 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
 
 def q1(spark_context: SparkContext, data_frame: DataFrame):
     # TODO: Implement Q1 here
-    return
+    spark = SparkSession(spark_context)
+
+    data_frame.createOrReplaceTempView("ratings_table")
+    result = spark.sql("""
+    SELECT userId, COUNT(DISTINCT songId) as total_ratings, AVG(rating) as avg_rating
+    FROM ratings_table
+    WHERE rating IS NOT NULL
+    GROUP BY userId
+    HAVING total_ratings >= 100 AND avg_rating < 2""")
+
+    print(result.show()) #Delete
+    
+    return result
 
 
 def q2(spark_context: SparkContext, rdd: RDD):
@@ -75,12 +99,12 @@ if __name__ == '__main__':
     spark_context = get_spark_context(on_server)
 
     data_frame = q0a(spark_context, on_server)
-    print(type(data_frame))
-    print(data_frame.show())
+    print(type(data_frame)) #Delete
+    print(data_frame.show()) #Delete
 
     rdd = q0b(spark_context, on_server)
-    print(type(rdd))
-    print('Here: ' + str(rdd.count()))
+    print(type(rdd)) #Delete
+    print('Here: ' + str(rdd.count())) #Delete
 
     q1(spark_context, data_frame)
 
