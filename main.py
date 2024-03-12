@@ -91,15 +91,63 @@ def q3(spark_context: SparkContext, rdd: RDD):
 
     # Remove None values
     rdd_notnone = rdd.filter(lambda record: record[2] is not None)
+
+    # Map every entry (userId, songId, rating) into (userId, {songId: rating})
     rdd_songList = rdd_notnone.map(lambda record: (record[0], {record[1]: record[2]}))
     [print(i) for i in rdd_songList.take(10)]
-    rdd_ratings_per_user = rdd_songList.reduceByKey(lambda ratings1, ratings2: {**ratings1, **ratings2}).cache()
-    [print(i) for i in rdd_ratings_per_user.take(2)]
+    
+    # Reduce by key, i.e. merge the dictionaries such that for each user we get a {songId: rating} dictionary
+    # And cache it, so we can broadcast to the cart. product
+    rdd_ratings_per_user = rdd_songList.reduceByKey(lambda ratings1, ratings2: {**ratings1, **ratings2})
+    
+    rdd_cart = rdd_ratings_per_user.cartesian(rdd_ratings_per_user).filter(lambda pair: pair[0][0] < pair[1][0])
+    [print(i) for i in rdd_ratings_per_user.take(1)]
 
-    rdd_users = rdd_ratings_per_user.map(lambda user_ratings: user_ratings[0])
+    def similarity(user_pair):
+        # user_pair = ((user1, {songId: rating}), (user2, {songId: rating}))
+        # {songId, rating} o {songId, rating} => {songCommon, (rating1, rating2)}
+        # foreach songCommmon
+        # do the math
 
-    [print(i) for i in rdd_users.take(10)]
+        import math
 
+        common = None
+        if len(user_pair[0][1].keys()) < len(user_pair[1][1].keys()):
+            common = set(user_pair[0][1].keys()).intersection(user_pair[1][1].keys())
+        else:
+            common = set(user_pair[1][1].keys()).intersection(user_pair[0][1].keys())
+        
+        ratings_sum = 0
+        rating_sum_sq_user1 = 0
+        rating_sum_sq_user2 = 0
+        for song in common:
+            ratings_sum += user_pair[0][1][song] * user_pair[1][1][song]
+            rating_sum_sq_user1 += user_pair[0][1][song]**2
+            rating_sum_sq_user2 += user_pair[1][1][song]**2
+
+        sim = ratings_sum/(math.sqrt(rating_sum_sq_user1)*math.sqrt(rating_sum_sq_user2))
+        return sim
+    #similarities[1][1] > 0.95
+    rdd_sim = rdd_cart.map(lambda user_pair: (user_pair[0][0], (user_pair[1][0], similarity(user_pair)))).filter(
+        lambda similarities: similarities[1][1] > 0.95)
+    [print(i) for i in rdd_sim.take(1)]
+    
+    def maxSim(b1, b2):
+        if b1[1] > b2[1]:
+            return b1
+        elif b1[1] == b2[1]:
+            if b1[0] < b2[0]:
+                return b1
+            else:
+                return b2
+        else:
+            return b2
+        
+    rdd_sim_max = rdd_sim.reduceByKey(lambda b1, b2: maxSim(b1, b2))
+    [print(i) for i in rdd_sim_max.take(1)]
+
+    rdd_sim_max_rounded = rdd_sim_max.map(lambda sim: (sim[0], sim[1][0], round(sim[1][1], 2)))
+    [print(i) for i in rdd_sim_max_rounded.take(rdd_sim_max_rounded.count())]
 
     return
 
