@@ -79,8 +79,45 @@ def q2(spark_context: SparkContext, rdd: RDD):
 
 
 def q3(spark_context: SparkContext, rdd: RDD):
-    # TODO: Implement Q3 here
-    return
+    # Initialize Spark Context
+    conf = SparkConf().setAppName("User Similarity")
+    sc = SparkContext(conf=conf)
+
+    # Function to compute cosine similarity
+    def cosine_similarity(vector1, vector2):
+        dot_product = sum(a * b for a, b in zip(vector1, vector2))
+        norm_a = math.sqrt(sum(a * a for a in vector1))
+        norm_b = math.sqrt(sum(b * b for b in vector2))
+        return dot_product / (norm_a * norm_b)
+
+    # Load and preprocess data
+    data = sc.textFile("plays.csv").map(lambda line: line.split(","))
+
+    # Map data to ((user, song), rating) and reduce to handle any duplicates
+    user_song_ratings = data.map(lambda x: ((int(x[0]), int(x[1])), float(x[2]))).reduceByKey(lambda x, y: x + y)
+
+    # Map to (user, (song, rating)) and group by user
+    user_ratings_group = user_song_ratings.map(lambda x: (x[0][0], (x[0][1], x[1]))).groupByKey()
+
+    # Convert group data into user and SparseVector format
+    user_ratings_vector = user_ratings_group.map(lambda x: (x[0], SparseVector(10000, {i[0]: i[1] for i in list(x[1])}))) # Assuming a max of 10k songs
+
+    # Self join to compute similarities with filter to ensure A < B and avoid duplicate calculations
+    similarities = user_ratings_vector.cartesian(user_ratings_vector) \
+        .filter(lambda x: x[0][0] < x[1][0]) \
+        .map(lambda x: ((x[0][0], x[1][0]), cosine_similarity(x[0][1].toArray(), x[1][1].toArray()))) \
+        .filter(lambda x: x[1] > 0.95)
+
+    # Find the best match for each user under the specified conditions
+    best_matches = similarities.reduceByKey(lambda a, b: a if a[1] > b[1] else b) \
+        .map(lambda x: f">> Q3: <{x[0][0]}, {x[0][1]}, {round(x[1], 2)}>").collect()
+
+    # Print the results
+    for match in best_matches:
+        return match
+
+    # Stop the Spark context
+    sc.stop()
 
 
 def q4(spark_context: SparkContext, rdd: RDD):
