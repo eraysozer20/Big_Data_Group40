@@ -1,6 +1,7 @@
 from pyspark import SparkConf, SparkContext, RDD
 from pyspark.sql import SparkSession, DataFrame
 
+
 # The code below may help you if your pc cannot find the correct python executable.
 # Don't use this code on the server!
 # import os
@@ -24,7 +25,7 @@ def get_spark_context(on_server: bool) -> SparkContext:
         #  log level to anything below WARN, Spark will print too much information.
         spark_context.setLogLevel("ERROR")
 
-    spark_context.setLogLevel("ERROR") #Delete
+    spark_context.setLogLevel("ERROR")  # Delete
 
     return spark_context
 
@@ -53,8 +54,13 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
     plays_file_path = "/plays.txt" if on_server else "plays.txt"
 
     # TODO: Implement Q0b here by creating an RDD out of the file at {@code plays_file_path}.
+    string_rdd = spark_context.textFile(plays_file_path)
 
-    return spark_context.textFile(plays_file_path)
+    rating_rdd = string_rdd.map(lambda s: (int(s.split(",")[0]), int(s.split(",")[1]), int(s.split(",")[2])) if len(s.split(",")) > 2 else (int(s.split(",")[0]), int(s.split(",")[1]), None))
+
+    [print(i) for i in rating_rdd.take(10)]
+
+    return rating_rdd
 
 
 def q1(spark_context: SparkContext, data_frame: DataFrame):
@@ -69,8 +75,8 @@ def q1(spark_context: SparkContext, data_frame: DataFrame):
     GROUP BY userId
     HAVING total_ratings >= 100 AND avg_rating < 2""")
 
-    print(result.show()) #Delete
-    
+    print(result.show())  # Delete
+
     return result
 
 
@@ -80,6 +86,21 @@ def q2(spark_context: SparkContext, rdd: RDD):
 
 def q3(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q3 here
+
+    print("working on q3")
+
+    # Remove None values
+    rdd_notnone = rdd.filter(lambda record: record[2] is not None)
+    rdd_songList = rdd_notnone.map(lambda record: (record[0], {record[1]: record[2]}))
+    [print(i) for i in rdd_songList.take(10)]
+    rdd_ratings_per_user = rdd_songList.reduceByKey(lambda ratings1, ratings2: {**ratings1, **ratings2}).cache()
+    [print(i) for i in rdd_ratings_per_user.take(2)]
+
+    rdd_users = rdd_ratings_per_user.map(lambda user_ratings: user_ratings[0])
+
+    [print(i) for i in rdd_users.take(10)]
+
+
     return
 
 
@@ -99,16 +120,18 @@ if __name__ == '__main__':
     spark_context = get_spark_context(on_server)
 
     data_frame = q0a(spark_context, on_server)
-    print(type(data_frame)) #Delete
-    print(data_frame.show()) #Delete
+    print(type(data_frame))  # Delete
+    print(data_frame.show())  # Delete
 
     rdd = q0b(spark_context, on_server)
-    print(type(rdd)) #Delete
-    print('Here: ' + str(rdd.count())) #Delete
+    print(type(rdd))  # Delete
+    print('Here: ' + str(rdd.count()))  # Delete
 
-    q1(spark_context, data_frame)
+    #q1(spark_context, data_frame)
 
     q2(spark_context, rdd)
+
+    q3(spark_context, rdd)
 
     q4(spark_context, rdd)
 
