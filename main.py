@@ -1,4 +1,5 @@
-from pyspark import SparkConf, SparkContext, RDD
+from pyspark import SparkConf, SparkContext, RDD, StorageLevel
+from pyspark.mllib.linalg import SparseVector
 from pyspark.sql import SparkSession, DataFrame
 
 
@@ -56,9 +57,11 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
     # TODO: Implement Q0b here by creating an RDD out of the file at {@code plays_file_path}.
     string_rdd = spark_context.textFile(plays_file_path)
 
-    rating_rdd = string_rdd.map(lambda s: (int(s.split(",")[0]), int(s.split(",")[1]), int(s.split(",")[2])) if len(s.split(",")) > 2 else (int(s.split(",")[0]), int(s.split(",")[1]), None))
+    rating_rdd = string_rdd.map(
+        lambda s: (int(s.split(",")[0]), int(s.split(",")[1]), int(s.split(",")[2])) if len(s.split(",")) > 2 else (
+            int(s.split(",")[0]), int(s.split(",")[1]), -1))#.persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
 
-    [print(i) for i in rating_rdd.take(10)]
+    # [print(i) for i in rating_rdd.take(10)]
 
     return rating_rdd
 
@@ -68,12 +71,17 @@ def q1(spark_context: SparkContext, data_frame: DataFrame):
     spark = SparkSession(spark_context)
 
     data_frame.createOrReplaceTempView("ratings_table")
+    # result = spark.sql("""
+    # SELECT userId, COUNT(DISTINCT songId) as total_ratings, AVG(rating) as avg_rating
+    # FROM ratings_table
+    # WHERE rating IS NOT NULL
+    # GROUP BY userId
+    # HAVING total_ratings >= 100 AND avg_rating < 2""")
+
     result = spark.sql("""
-    SELECT userId, COUNT(DISTINCT songId) as total_ratings, AVG(rating) as avg_rating
+    SELECT MAX(songId)
     FROM ratings_table
-    WHERE rating IS NOT NULL
-    GROUP BY userId
-    HAVING total_ratings >= 100 AND avg_rating < 2""")
+    """)
 
     print(result.show())  # Delete
 
@@ -86,20 +94,138 @@ def q2(spark_context: SparkContext, rdd: RDD):
 
 def q3(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q3 here
+    import time
 
     print("working on q3")
 
     # Remove None values
-    rdd_notnone = rdd.filter(lambda record: record[2] is not None)
-    rdd_songList = rdd_notnone.map(lambda record: (record[0], {record[1]: record[2]}))
-    [print(i) for i in rdd_songList.take(10)]
-    rdd_ratings_per_user = rdd_songList.reduceByKey(lambda ratings1, ratings2: {**ratings1, **ratings2}).cache()
-    [print(i) for i in rdd_ratings_per_user.take(2)]
+    rdd_notnone = rdd.filter(lambda record: record[2] > 0)
 
-    rdd_users = rdd_ratings_per_user.map(lambda user_ratings: user_ratings[0])
+    # Map every entry (userId, songId, rating) into (userId, {songId: rating}, rating**2 )
+    rdd_songList = rdd_notnone.map(lambda record: (record[0], ({record[1]: record[2]}, record[2] ** 2)))
 
-    [print(i) for i in rdd_users.take(10)]
+    # Reduce by key, i.e. merge the dictionaries such that for each user we get a {songId: rating} dictionary and sum of rating**
+    rdd_ratings_per_user = rdd_songList.reduceByKey(
+        lambda ratings1, ratings2: ({**ratings1[0], **ratings2[0]}, ratings1[1] + ratings2[1])).cache()
+    # [print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
 
+    rdd_cart = rdd_ratings_per_user.cartesian(rdd_ratings_per_user).filter(
+        lambda pair: pair[0][0] < pair[1][0]).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+
+    # [print("card ", i) for i in rdd_cart.take(1)]
+
+    def similarity(user_pair):
+        # user_pair = ((user1, ({songId, rating}, total_rating_sqr)), (user2, ({songId, rating}, total_rating_sqr))
+        # {songId, rating} o {songId, rating} => {songCommon, (rating1, rating2)}
+        # foreach songCommmon
+        # do the math
+
+        import math
+
+        # Find songs in common by converting one of the user's song list (the smallest) into a set and
+        # using intersection with the other user's song list
+        common = None
+        if len(user_pair[0][1][0].keys()) < len(user_pair[1][1][0].keys()):
+            common = set(user_pair[0][1][0].keys()).intersection(user_pair[1][1][0].keys())
+        else:
+            common = set(user_pair[1][1][0].keys()).intersection(user_pair[0][1][0].keys())
+
+        ratings_sum = 0
+        for song in common:
+            ratings_sum += user_pair[0][1][0][song] * user_pair[1][1][0][song]
+
+        sim = ratings_sum / (math.sqrt(user_pair[0][1][1]) * math.sqrt(user_pair[1][1][1]))
+        return sim
+
+    rdd_sim = rdd_cart.map(lambda user_pair: (user_pair[0][0], (user_pair[1][0], similarity(user_pair)))).filter(
+        lambda similarities: similarities[1][1] > 0.95)
+
+    # [print("sim", i) for i in rdd_sim.take(1)]
+
+    def maxSim(b1, b2):
+        if b1[1] > b2[1]:
+            return b1
+        elif b1[1] == b2[1]:
+            if b1[0] < b2[0]:
+                return b1
+            else:
+                return b2
+        else:
+            return b2
+
+    rdd_sim_max = rdd_sim.reduceByKey(lambda b1, b2: maxSim(b1, b2))
+    # [print("sim max ", i) for i in rdd_sim_max.take(1)]
+
+    rdd_sim_max_rounded = rdd_sim_max.map(lambda sim: (sim[0], sim[1][0], round(sim[1][1], 2)))
+    # [print("sim max rounded", i) for i in rdd_sim_max_rounded.take(rdd_sim_max_rounded.count())]
+
+    print(rdd_sim_max_rounded.collect())
+
+    return
+
+
+def q3_alt(spark_context: SparkContext, rdd: RDD):
+    # TODO: Implement Q3 here
+    import time
+
+    print("working on q3")
+
+    # Remove None values
+    rdd_notnone = rdd.filter(lambda record: record[2] > 0)
+    # [print("notnone ", i) for i in rdd_notnone.take(1)]
+
+    # Map every entry (userId, songId, rating) into (user, [(songid, rating)]
+    rdd_songList = rdd_notnone.map(lambda record: (record[0], [(record[1], record[2])]))
+    #[print("list ", i) for i in rdd_songList.take(1)]
+
+    # Up to this point is fast: ~3s
+    def list_merge(list1, list2):
+        list1.append(list2)
+        return list1
+
+    # Reduce by key, i.e. merge the lists - ~1m40s
+    rdd_ratings_per_user = rdd_songList.reduceByKey(
+        lambda ratings1, ratings2: list_merge(ratings1, ratings2))
+    [print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
+
+    # Convert the list into sparsevectors (user, SparseVector)
+    # rdd_ratings_per_user_as_vector = rdd_ratings_per_user.map(
+    #     lambda user_rating: (user_rating[0], SparseVector(50947+1, user_rating[1]))).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+    #
+    # #[print("toVector", i) for i in rdd_ratings_per_user_as_vector.take(1)]
+    #
+    # # Now do the cartesian, try persistence to see if it speeds up
+    # rdd_cart = rdd_ratings_per_user_as_vector.cartesian(rdd_ratings_per_user_as_vector).filter(
+    #     lambda pair: pair[0][0] < pair[1][0])#.persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+
+    # Map (user1, SparseVector)(user2, SparseVector) to (user1, (user2, similarity))
+    # rdd_sim = rdd_cart.map(
+    #     lambda user_pair: (user_pair[0][0],
+    #                        (user_pair[1][0], user_pair[0][1].dot(user_pair[1][1] / (user_pair[0][1].norm(2) * user_pair[1][1].norm(2)))))
+    # ).filter(
+    #     lambda similarities: similarities[1][1] > 0.95)
+
+    # print(rdd_sim.count())
+    #[print("sim", i) for i in rdd_sim.take(1)]
+
+    def maxSim(b1, b2):
+        if b1[1] > b2[1]:
+            return b1
+        elif b1[1] == b2[1]:
+            if b1[0] < b2[0]:
+                return b1
+            else:
+                return b2
+        else:
+            return b2
+
+    # rdd_sim_max = rdd_sim.reduceByKey(lambda b1, b2: maxSim(b1, b2))
+    # [print("sim max ", i) for i in rdd_sim_max.take(1)]
+
+    # rdd_sim_max_rounded = rdd_sim_max.map(lambda sim: (sim[0], sim[1][0], round(sim[1][1], 2)))
+    # [print("sim max rounded", i) for i in rdd_sim_max_rounded.take(rdd_sim_max_rounded.count())]
+
+    # print(rdd_sim_max_rounded.collect())
 
     return
 
@@ -124,14 +250,14 @@ if __name__ == '__main__':
     print(data_frame.show())  # Delete
 
     rdd = q0b(spark_context, on_server)
-    print(type(rdd))  # Delete
-    print('Here: ' + str(rdd.count()))  # Delete
+    #print(type(rdd))  # Delete
+    #print('Here: ' + str(rdd.count()))  # Delete
 
     #q1(spark_context, data_frame)
 
-    q2(spark_context, rdd)
+    # q2(spark_context, rdd)
 
-    q3(spark_context, rdd)
+    q3_alt(spark_context, rdd)
 
     q4(spark_context, rdd)
 
