@@ -176,7 +176,7 @@ def q3_alt(spark_context: SparkContext, rdd: RDD):
 
     # Map every entry (userId, songId, rating) into (user, [(songid, rating)]
     rdd_songList = rdd_notnone.map(lambda record: (record[0], [(record[1], record[2])]))
-    #[print("list ", i) for i in rdd_songList.take(1)]
+    [print("list ", i) for i in rdd_songList.take(1)]
 
     # Up to this point is fast: ~3s
     def list_merge(list1, list2):
@@ -186,7 +186,7 @@ def q3_alt(spark_context: SparkContext, rdd: RDD):
     # Reduce by key, i.e. merge the lists - ~1m40s
     rdd_ratings_per_user = rdd_songList.reduceByKey(
         lambda ratings1, ratings2: list_merge(ratings1, ratings2))
-    [print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
+    #[print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
 
     # Convert the list into sparsevectors (user, SparseVector)
     # rdd_ratings_per_user_as_vector = rdd_ratings_per_user.map(
