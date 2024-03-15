@@ -1,3 +1,5 @@
+from timeit import timeit
+
 from pyspark import SparkConf, SparkContext, RDD, StorageLevel
 from pyspark.mllib.linalg import SparseVector
 from pyspark.sql import SparkSession, DataFrame
@@ -106,11 +108,11 @@ def q3(spark_context: SparkContext, rdd: RDD):
 
     # Reduce by key, i.e. merge the dictionaries such that for each user we get a {songId: rating} dictionary and sum of rating**
     rdd_ratings_per_user = rdd_songList.reduceByKey(
-        lambda ratings1, ratings2: ({**ratings1[0], **ratings2[0]}, ratings1[1] + ratings2[1])).cache()
+        lambda ratings1, ratings2: ({**ratings1[0], **ratings2[0]}, ratings1[1] + ratings2[1])).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
     # [print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
 
     rdd_cart = rdd_ratings_per_user.cartesian(rdd_ratings_per_user).filter(
-        lambda pair: pair[0][0] < pair[1][0]).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+        lambda pair: pair[0][0] < pair[1][0])
 
     # [print("card ", i) for i in rdd_cart.take(1)]
 
@@ -166,47 +168,43 @@ def q3(spark_context: SparkContext, rdd: RDD):
 
 def q3_alt(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q3 here
-    import time
-
     print("working on q3")
 
     # Remove None values
     rdd_notnone = rdd.filter(lambda record: record[2] > 0)
-    # [print("notnone ", i) for i in rdd_notnone.take(1)]
 
     # Map every entry (userId, songId, rating) into (user, [(songid, rating)]
-    rdd_songList = rdd_notnone.map(lambda record: (record[0], [(record[1], record[2])]))
-    [print("list ", i) for i in rdd_songList.take(1)]
+    rdd_songList = rdd_notnone.map(lambda record: (record[0], {record[1]: record[2]}))
 
     # Up to this point is fast: ~3s
     def list_merge(list1, list2):
         list1.append(list2)
         return list1
 
-    # Reduce by key, i.e. merge the lists - ~1m40s
+    # Reduce by key, i.e. merge the lists
     rdd_ratings_per_user = rdd_songList.reduceByKey(
-        lambda ratings1, ratings2: list_merge(ratings1, ratings2))
+        lambda ratings1, ratings2: {**ratings1, **ratings2})
     #[print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
 
     # Convert the list into sparsevectors (user, SparseVector)
-    # rdd_ratings_per_user_as_vector = rdd_ratings_per_user.map(
-    #     lambda user_rating: (user_rating[0], SparseVector(50947+1, user_rating[1]))).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
-    #
-    # #[print("toVector", i) for i in rdd_ratings_per_user_as_vector.take(1)]
-    #
-    # # Now do the cartesian, try persistence to see if it speeds up
-    # rdd_cart = rdd_ratings_per_user_as_vector.cartesian(rdd_ratings_per_user_as_vector).filter(
-    #     lambda pair: pair[0][0] < pair[1][0])#.persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+    rdd_ratings_per_user_as_vector = rdd_ratings_per_user.map(
+        lambda user_rating: (user_rating[0], SparseVector(50947+1, user_rating[1])))
+
+    # [print("toVector", i) for i in rdd_ratings_per_user_as_vector.take(1)]
+    #print("ToVector", rdd_ratings_per_user_as_vector.count())
+
+    # Now do the cartesian, try persistence to see if it speeds up
+    rdd_cart = rdd_ratings_per_user_as_vector.cartesian(rdd_ratings_per_user_as_vector).filter(
+        lambda pair: pair[0][0] < pair[1][0]).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+
+    #[print("cart", i) for i in rdd_cart.take(1)]
 
     # Map (user1, SparseVector)(user2, SparseVector) to (user1, (user2, similarity))
-    # rdd_sim = rdd_cart.map(
-    #     lambda user_pair: (user_pair[0][0],
-    #                        (user_pair[1][0], user_pair[0][1].dot(user_pair[1][1] / (user_pair[0][1].norm(2) * user_pair[1][1].norm(2)))))
-    # ).filter(
-    #     lambda similarities: similarities[1][1] > 0.95)
+    rdd_sim = rdd_cart.map(
+        lambda user_pair: (user_pair[0][0], (user_pair[1][0], user_pair[0][1].dot(user_pair[1][1] / (user_pair[0][1].norm(2) * user_pair[1][1].norm(2)))))
+    )
 
-    # print(rdd_sim.count())
-    #[print("sim", i) for i in rdd_sim.take(1)]
+    #print("sim ", rdd_sim.take(1))
 
     def maxSim(b1, b2):
         if b1[1] > b2[1]:
@@ -219,13 +217,16 @@ def q3_alt(spark_context: SparkContext, rdd: RDD):
         else:
             return b2
 
-    # rdd_sim_max = rdd_sim.reduceByKey(lambda b1, b2: maxSim(b1, b2))
-    # [print("sim max ", i) for i in rdd_sim_max.take(1)]
+    rdd_sim_filtered = rdd_sim.filter(lambda similarities: similarities[1][1] > 0.95)
+    [print("sim filtered ", i) for i in rdd_sim_filtered.take(1)]
 
-    # rdd_sim_max_rounded = rdd_sim_max.map(lambda sim: (sim[0], sim[1][0], round(sim[1][1], 2)))
-    # [print("sim max rounded", i) for i in rdd_sim_max_rounded.take(rdd_sim_max_rounded.count())]
+    #rdd_sim_max = rdd_sim_filtered.reduceByKey(lambda b1, b2: maxSim(b1, b2))
+    #[print("sim max ", i) for i in rdd_sim_max.take(1)]
 
-    # print(rdd_sim_max_rounded.collect())
+    #rdd_sim_max_rounded = rdd_sim_max.map(lambda sim: (sim[0], sim[1][0], round(sim[1][1], 2)))
+    #[print("sim max rounded", i) for i in rdd_sim_max_rounded.take(rdd_sim_max_rounded.count())]
+
+    #print(rdd_sim_max_rounded.take(1))
 
     return
 
@@ -257,7 +258,7 @@ if __name__ == '__main__':
 
     # q2(spark_context, rdd)
 
-    q3_alt(spark_context, rdd)
+    print("Took: ", timeit(lambda: q3(spark_context, rdd), number=1))
 
     q4(spark_context, rdd)
 
