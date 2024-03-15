@@ -106,9 +106,13 @@ def q3(spark_context: SparkContext, rdd: RDD):
     # Map every entry (userId, songId, rating) into (userId, {songId: rating}, rating**2 )
     rdd_songList = rdd_notnone.map(lambda record: (record[0], ({record[1]: record[2]}, record[2] ** 2)))
 
+    def map_merge(map1, map2):
+        map1.update(map2)
+        return map1
+
     # Reduce by key, i.e. merge the dictionaries such that for each user we get a {songId: rating} dictionary and sum of rating**
     rdd_ratings_per_user = rdd_songList.reduceByKey(
-        lambda ratings1, ratings2: ({**ratings1[0], **ratings2[0]}, ratings1[1] + ratings2[1])).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+        lambda ratings1, ratings2: (map_merge(ratings1[0], ratings2[0]), ratings1[1] + ratings2[1])).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
     # [print("ratings ", i) for i in rdd_ratings_per_user.take(1)]
 
     rdd_cart = rdd_ratings_per_user.cartesian(rdd_ratings_per_user).filter(
@@ -124,19 +128,23 @@ def q3(spark_context: SparkContext, rdd: RDD):
 
         import math
 
+        user1 = user_pair[0]
+        user2 = user_pair[1]
+
         # Find songs in common by converting one of the user's song list (the smallest) into a set and
         # using intersection with the other user's song list
-        common = None
-        if len(user_pair[0][1][0].keys()) < len(user_pair[1][1][0].keys()):
-            common = set(user_pair[0][1][0].keys()).intersection(user_pair[1][1][0].keys())
-        else:
-            common = set(user_pair[1][1][0].keys()).intersection(user_pair[0][1][0].keys())
+        songs = None
+        if len(user1[1][0].keys()) > len(user2[1][0].keys()):
+            temp = user1
+            user1 = user2
+            user2 = temp
 
         ratings_sum = 0
-        for song in common:
-            ratings_sum += user_pair[0][1][0][song] * user_pair[1][1][0][song]
+        for song in user1[1][0].keys():
+            if song in user2[1][0]:
+                ratings_sum += user1[1][0][song] * user2[1][0][song]
 
-        sim = ratings_sum / (math.sqrt(user_pair[0][1][1]) * math.sqrt(user_pair[1][1][1]))
+        sim = ratings_sum / (math.sqrt(user1[1][1]) * math.sqrt(user2[1][1]))
         return sim
 
     rdd_sim = rdd_cart.map(lambda user_pair: (user_pair[0][0], (user_pair[1][0], similarity(user_pair)))).filter(
