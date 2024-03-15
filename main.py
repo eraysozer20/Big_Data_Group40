@@ -1,3 +1,4 @@
+import math
 from timeit import timeit
 
 from pyspark import SparkConf, SparkContext, RDD, StorageLevel
@@ -241,7 +242,46 @@ def q3_alt(spark_context: SparkContext, rdd: RDD):
 
 def q4(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q4 here
-    return
+    # Stream S -> RDD
+    # Hash functions map M -> M^k with k >= 2
+    #
+    #
+
+    def lsb(x):
+        return (x & -x).bit_length() - 1
+
+    M = 2**31
+    epsilon = 0.1
+    delta = 0.1
+
+    r = int(math.ceil(1/epsilon**2*math.log2(1/delta)))
+
+    # Hash function: ((ax + b)%c)%m
+    hashes = []
+    a_primes = [i for i in range(2**29, 2**31) if math.(i)]
+    for i in range(0, r):
+
+
+    # initialize, create empty bit sketches
+    sketches = [0]*r
+
+    # SOmething for element in S
+    # Now for each hash function
+    for i in range(0, r):
+        v = 0  # Hash the element
+        sketches[i] |= 1 << lsb(v)
+
+    zero_sum = 0
+    for i in range(0, r):
+        left_most = -1
+        for m in range(int(math.log2(M) - 1), 0):
+            if (sketches[i] & (1 << m)) == 0:
+                left_most = m
+        zero_sum += left_most
+
+    R = 1.2928 * 2**(zero_sum/r)
+
+    return R
 
 
 def q5(spark_context: SparkContext, rdd: RDD):
@@ -266,9 +306,9 @@ if __name__ == '__main__':
 
     # q2(spark_context, rdd)
 
-    print("Took: ", timeit(lambda: q3(spark_context, rdd), number=1))
+    #print("Took: ", timeit(lambda: q3(spark_context, rdd), number=1))
 
-    q4(spark_context, rdd)
+    print("Took: ", timeit(lambda: q4(spark_context, rdd), number=1))
 
     q5(spark_context, rdd)
 
