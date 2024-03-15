@@ -53,9 +53,13 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
     plays_file_path = "/plays.txt" if on_server else "plays.txt"
 
     # TODO: Implement Q0b here by creating an RDD out of the file at {@code plays_file_path}.
+    string_rdd = spark_context.textFile(plays_file_path)
 
-    return spark_context.textFile(plays_file_path)
+    rating_rdd = string_rdd.map(lambda s: (int(s.split(",")[0]), int(s.split(",")[1]), int(s.split(",")[2])) if len(s.split(",")) > 2 else (int(s.split(",")[0]), int(s.split(",")[1]), None))
 
+    [print(i) for i in rating_rdd.take(10)]
+
+    return rating_rdd
 
 def q1(spark_context: SparkContext, data_frame: DataFrame):
     # TODO: Implement Q1 here
@@ -75,7 +79,25 @@ def q1(spark_context: SparkContext, data_frame: DataFrame):
 
 
 def q2(spark_context: SparkContext, rdd: RDD):
-    return
+
+
+    rddRatingsAsTuples = rdd.map(lambda s: (int(s.split(",")[0]), int(s.split(",")[1]), float(s.split(",")[2]) if len(s.split(",")) == 3 else -1.0))
+        
+    rddActualRatingsAsTuples = rddRatingsAsTuples.filter(lambda r: r[2] > 0.0)
+        
+    rddRatingCounts = rddActualRatingsAsTuples.map(lambda r: (r[0], (1, r[2])))
+        
+    rddRatingsByUser = rddRatingCounts.reduceByKey(lambda r1, r2: (r1[0] + r2[0], r1[1] + r2[1]))
+        
+    rddRatingsByUserAtLeast100 = rddRatingsByUser.filter(lambda r: r[1][0] >= 100)
+        
+    rddAverageRatingByUserAtLeast100 = rddRatingsByUserAtLeast100.map(lambda r1: (r1[0], r1[1][1]/r1[1][0]))
+        
+    ans = rddAverageRatingByUserAtLeast100.reduce(lambda r1, r2: r1 if r1[1] < r2[1] else r2)
+
+    print('Q2: ' + str(ans))
+
+    return ans
 
 
 def q3(spark_context: SparkContext, rdd: RDD):
@@ -87,9 +109,100 @@ def q4(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q4 here
     return
 
+''' First Try
+def q5(spark_context: SparkContext, rdd: RDD):
 
+    #print(str(rddRatingsAsTuples.count()))
+    rddActualRatingsAsTuples = rdd.filter(lambda record: record[2] is not None)
+    print("debug2")
+    #print(str(rddActualRatingsAsTuples.count()))
+    rddRatingCounts = rddActualRatingsAsTuples.map(lambda r: (r[0], 1))
+    print("debug3")
+    #print(str(rddRatingCounts.count()))
+    rddRatingsByUser = rddRatingCounts.reduceByKey(lambda a,b: a+b)
+    print("debug4")
+    #print(str(rddRatingsByUser.count()))
+    #print(rddRatingsByUser.collect())
+    rddRatingsByUserAtMost8000 = rddRatingsByUser.filter(lambda r: r[1] <= 8000)
+    print("debug5")
+    #print(str(rddRatingsByUserAtMost8000.count()))
+    #print(rddRatingsByUserAtMost8000.collect())
+    rddSorted = rddRatingsByUserAtMost8000.sortBy(lambda x: x[1])
+    print("debug6")
+    count = int(rddSorted.count())
+    #print(count)
+    #print(rddSorted.collect())
+    print("debug7")
+    rddSortedUserIDs = rddSorted.map(lambda x: x[0])
+    CollectedUserIDs = rddSortedUserIDs.collect()
+
+    rddSortedValues = rddSorted.map(lambda x: x[1])
+    CollectedValues = rddSortedValues.collect()
+
+    matr = []
+    arr = []
+
+    print("debug8")
+    for i in range(0,count):
+        for j in range(i+1,count):
+            if CollectedValues[i]*2 + CollectedValues[j] <= 8000:
+                for k in range(j+1,count):
+                    if CollectedValues[i] + CollectedValues[j] + CollectedValues[k] <= 8000:
+                        arr = [CollectedUserIDs[i],CollectedUserIDs[j],CollectedUserIDs[k],CollectedValues[i] + CollectedValues[j] + CollectedValues[k]]
+                        matr.append(arr)
+                    else:
+                        break
+            else:
+                break
+    print("debug9")
+
+    print('Q5: ')
+    print(matr)
+
+    return
+'''
 def q5(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q5 here
+    
+    rddActualRatingsAsTuples = rdd.filter(lambda record: record[2] is not None)
+
+    rddRatingCounts = rddActualRatingsAsTuples.map(lambda r: (r[0], [r[1]]))
+
+    rddRatingsByUser = rddRatingCounts.reduceByKey(lambda a,b: a+b)
+
+    rddRatingsByUserAtMost8000 = rddRatingsByUser.filter(lambda r: len(r[1]) <= 8000)
+
+    sorted_rdd = rddRatingsByUserAtMost8000.sortBy(lambda x: x[0])
+   
+    cartesian_rdd = sorted_rdd.cartesian(sorted_rdd)
+
+    nonsame_rdd = cartesian_rdd.filter(lambda x: x[0][0] < x[1][0])
+    print("debug0")
+
+    merged_rdd = nonsame_rdd.map(lambda x: ((x[0][0], x[1][0]), (x[0][1] + x[1][1])))
+    print("debug1")
+    filtered_rdd = merged_rdd.mapValues(lambda x: list(set(x)))
+
+    #print(filtered_rdd.take(2))
+    print("debug2")
+    rddRatingsByTwoUsersAtMost8000 = filtered_rdd.filter(lambda r: len(r[1]) <= 8000)
+    print("debug2.5")
+    print(rddRatingsByTwoUsersAtMost8000.take(1))
+    
+    print("debug3")
+    second_cartesian_rdd = rddRatingsByTwoUsersAtMost8000.cartesian(rddRatingsByUserAtMost8000)
+    print("debug4")
+    second_nonsame_rdd = second_cartesian_rdd.filter(lambda x: x[0][0] != x[1][0]).filter(lambda x: x[0][1] != x[1][0])
+    print("debug5")
+    second_merged_rdd = second_nonsame_rdd.map(lambda x: ((x[0][0][0], x[0][0][1], x[1][0]), (x[0][1] + x[1][1])))
+    print("debug6")
+    second_filtered_rdd = second_merged_rdd.mapValues(lambda x: list(set(x)))
+    print("debug7")
+    rddRatingsByThreeUsersAtMost8000 = second_filtered_rdd.filter(lambda r: len(r[1]) <= 8000)
+    print("debug8")
+    result = rddRatingsByThreeUsersAtMost8000.map(lambda x: ((x[0][0], x[0][1], x[0][2], len(x[1]))))
+    #print(result.collect())
+
     return
 
 
@@ -98,17 +211,17 @@ if __name__ == '__main__':
 
     spark_context = get_spark_context(on_server)
 
-    data_frame = q0a(spark_context, on_server)
-    print(type(data_frame)) #Delete
-    print(data_frame.show()) #Delete
+    #data_frame = q0a(spark_context, on_server)
+    #print(type(data_frame)) #Delete
+    #print(data_frame.show()) #Delete
 
     rdd = q0b(spark_context, on_server)
-    print(type(rdd)) #Delete
-    print('Here: ' + str(rdd.count())) #Delete
+    #print(type(rdd)) #Delete
+    #print('Here: ' + str(rdd.count())) #Delete
 
-    q1(spark_context, data_frame)
+    #q1(spark_context, data_frame)
 
-    q2(spark_context, rdd)
+    #q2(spark_context, rdd)
 
     q4(spark_context, rdd)
 
