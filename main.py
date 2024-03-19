@@ -1,3 +1,5 @@
+from timeit import timeit
+
 from pyspark import SparkConf, SparkContext, RDD
 from pyspark.sql import SparkSession, DataFrame
 
@@ -57,19 +59,21 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
     return spark_context.textFile(plays_file_path)
 
 
+# TODO: Test on server whether DISTINCT songId has different output from songId, as on test set the output is the same
+# BUT, it is faster
 def q1(spark_context: SparkContext, data_frame: DataFrame):
     # TODO: Implement Q1 here
     spark = SparkSession(spark_context)
 
     data_frame.createOrReplaceTempView("ratings_table")
     result = spark.sql("""
-    SELECT userId, COUNT(DISTINCT songId) as total_ratings, AVG(rating) as avg_rating
+    SELECT userId
     FROM ratings_table
     WHERE rating IS NOT NULL
     GROUP BY userId
-    HAVING total_ratings >= 100 AND avg_rating < 2""")
+    HAVING COUNT(DISTINCT songId) >= 100 AND AVG(rating) < 2""")
 
-    print(result.show()) #Delete
+    print("Q1: ", result.count())
     
     return result
 
@@ -99,14 +103,10 @@ if __name__ == '__main__':
     spark_context = get_spark_context(on_server)
 
     data_frame = q0a(spark_context, on_server)
-    print(type(data_frame)) #Delete
-    print(data_frame.show()) #Delete
 
     rdd = q0b(spark_context, on_server)
-    print(type(rdd)) #Delete
-    print('Here: ' + str(rdd.count())) #Delete
 
-    q1(spark_context, data_frame)
+    print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=3))
 
     q2(spark_context, rdd)
 
