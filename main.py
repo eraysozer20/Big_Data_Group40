@@ -58,9 +58,6 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
 
     return spark_context.textFile(plays_file_path)
 
-
-# TODO: Test on server whether DISTINCT songId has different output from songId, as on test set the output is the same
-# BUT, it is faster
 def q1(spark_context: SparkContext, data_frame: DataFrame):
     # TODO: Implement Q1 here
     spark = SparkSession(spark_context)
@@ -71,7 +68,7 @@ def q1(spark_context: SparkContext, data_frame: DataFrame):
     FROM ratings_table
     WHERE rating IS NOT NULL
     GROUP BY userId
-    HAVING COUNT(DISTINCT songId) >= 100 AND AVG(rating) < 2""")
+    HAVING COUNT(songId) >= 100 AND AVG(rating) < 2""")
 
     print("Q1: ", result.count())
     
@@ -106,7 +103,7 @@ if __name__ == '__main__':
 
     rdd = q0b(spark_context, on_server)
 
-    print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=3))
+    print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=1))
 
     q2(spark_context, rdd)
 
