@@ -1,6 +1,6 @@
 from timeit import timeit
 
-from pyspark import SparkConf, SparkContext, RDD
+from pyspark import SparkConf, SparkContext, RDD, StorageLevel
 from pyspark.sql import SparkSession, DataFrame
 
 # The code below may help you if your pc cannot find the correct python executable.
@@ -81,6 +81,77 @@ def q2(spark_context: SparkContext, rdd: RDD):
 
 def q3(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q3 here
+
+    # Filter out None values
+    rdd_ratings_only = rdd.filter(lambda record: record[2] is not None)
+
+    # Map every entry (userId, songId, rating) to (userId, ({songId: rating}, rating**2))
+    rdd_songList = rdd_ratings_only.map(lambda record: (record[0], ({record[1]: record[2]}, record[2] ** 2)))
+
+    # A helper function that merges two maps/dictionaries and returns the first
+    def map_merge(map1, map2):
+        map1.update(map2)
+        return map1
+
+    # Reduce by key, i.e. merge the dictionaries such that for each user we get a {songId: rating} dictionary and sum of rating**
+    # Also, persist this RDD to prevent recomputing it in the cartesian
+    rdd_ratings_per_user = rdd_songList.reduceByKey(
+        lambda ratings1, ratings2: (map_merge(ratings1[0], ratings2[0]), ratings1[1] + ratings2[1])).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+
+    # Now perform the cartesian with itself to create all user pairs and their ratings, filter such that we only
+    # get each pair once since we don't care about order within a pair
+    rdd_cart = rdd_ratings_per_user.cartesian(rdd_ratings_per_user).filter(
+        lambda pair: pair[0][0] < pair[1][0])
+
+    # Helper function to compute the similarity between two users
+    def similarity(user_pair):
+        import math
+
+        # Split the pair into two users
+        user1 = user_pair[0]
+        user2 = user_pair[1]
+
+        # Find the user in this pair with the smallest song list
+        if len(user1[1][0].keys()) > len(user2[1][0].keys()):
+            temp = user1
+            user1 = user2
+            user2 = temp
+
+        ratings_sum = 0
+        # For each song in the list, check if the other user has it in common and if so sum the product
+        for song in user1[1][0].keys():
+            if song in user2[1][0]:
+                ratings_sum += user1[1][0][song] * user2[1][0][song]
+
+        # Finally calculate the similarity score, by dividing ratings_sum by the sqrt of each of the individual ratings
+        sim = ratings_sum / (math.sqrt(user1[1][1]) * math.sqrt(user2[1][1]))
+        return sim
+
+    # Map the pair of users to (user1, (user2, similarity)) and filter such that only pairs with sim > 0.95 remain
+    rdd_sim = rdd_cart.map(lambda user_pair: (user_pair[0][0], (user_pair[1][0], similarity(user_pair)))).filter(
+        lambda similarities: similarities[1][1] > 0.95)
+
+    # Helper function that compares two (user, similarity) pairs and returns the maximum
+    def maxSim(similarity1, similarity2):
+        # If the first one has a higher similarity than the second, return the first
+        if similarity1[1] > similarity2[1]:
+            return similarity1
+        # If they have equal similarity, return the one with the smallest userId
+        elif similarity1[1] == similarity2[1]:
+            if similarity1[0] < similarity2[0]:
+                return similarity1
+            else:
+                return similarity2
+        # Otherwise, return the second
+        else:
+            return similarity2
+
+    # Now reduce by key to get for each user another user with the highest similarity score
+    rdd_sim_max = rdd_sim.reduceByKey(lambda b1, b2: maxSim(b1, b2))
+
+    # Now print all the results
+    [print("Q3: <", sim[0], " ", sim[1][0], " ", round(sim[1][1], 2), ">") for sim in rdd_sim_max.collect()]
+
     return
 
 
@@ -106,6 +177,8 @@ if __name__ == '__main__':
     print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=1))
 
     q2(spark_context, rdd)
+
+    print("Q3 took: ", timeit(lambda: q3(spark_context, rdd), number=1))
 
     q4(spark_context, rdd)
 
