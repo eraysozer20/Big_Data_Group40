@@ -73,19 +73,14 @@ def q1(spark_context: SparkContext, data_frame: DataFrame):
     spark = SparkSession(spark_context)
 
     data_frame.createOrReplaceTempView("ratings_table")
-    # result = spark.sql("""
-    # SELECT userId, COUNT(DISTINCT songId) as total_ratings, AVG(rating) as avg_rating
-    # FROM ratings_table
-    # WHERE rating IS NOT NULL
-    # GROUP BY userId
-    # HAVING total_ratings >= 100 AND avg_rating < 2""")
-
     result = spark.sql("""
-    SELECT MAX(songId)
+    SELECT userId
     FROM ratings_table
-    """)
+    WHERE rating IS NOT NULL
+    GROUP BY userId
+    HAVING COUNT(DISTINCT songId) >= 100 AND AVG(rating) < 2""")
 
-    print(result.show())  # Delete
+    print(result.show())
 
     return result
 
