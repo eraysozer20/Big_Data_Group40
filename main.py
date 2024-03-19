@@ -56,7 +56,7 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
 
     # TODO: Implement Q0b here by creating an RDD out of the file at {@code plays_file_path}.
     # Load the file as a string RDD: "userid, songid, rating"
-    string_rdd = spark_context.textFile(plays_file_path)
+    string_rdd = spark_context.textFile(plays_file_path,)
 
     # Pre-process by converting it into (userid, songid, rating)
     # Also persist this RDD, since all other questions use this one as a base
@@ -91,7 +91,7 @@ def q3(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q3 here
 
     # Filter out None values
-    rdd_ratings_only = rdd.filter(lambda record: record[2] is not None)
+    rdd_ratings_only = rdd.filter(lambda record: record[2] > 0)
 
     # Map every entry (userId, songId, rating) to (userId, ({songId: rating}, rating**2))
     rdd_songList = rdd_ratings_only.map(lambda record: (record[0], ({record[1]: record[2]}, record[2] ** 2)))
@@ -158,7 +158,12 @@ def q3(spark_context: SparkContext, rdd: RDD):
     rdd_sim_max = rdd_sim.reduceByKey(lambda b1, b2: maxSim(b1, b2))
 
     # Now print all the results
-    [print("Q3: <", sim[0], " ", sim[1][0], " ", round(sim[1][1], 2), ">") for sim in rdd_sim_max.collect()]
+    result = rdd_sim_max.collect()
+
+    [print("Q3: <", sim[0], " ", sim[1][0], " ", round(sim[1][1], 2), ">") for sim in result]
+
+    # Done with this question, so unpersist this RDD
+    rdd_ratings_per_user.unpersist()
 
     return
 
