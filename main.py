@@ -55,8 +55,16 @@ def q0b(spark_context: SparkContext, on_server: bool) -> RDD:
     plays_file_path = "/plays.txt" if on_server else "plays.txt"
 
     # TODO: Implement Q0b here by creating an RDD out of the file at {@code plays_file_path}.
+    # Load the file as a string RDD: "userid, songid, rating"
+    string_rdd = spark_context.textFile(plays_file_path)
 
-    return spark_context.textFile(plays_file_path)
+    # Pre-process by converting it into (userid, songid, rating)
+    # Also persist this RDD, since all other questions use this one as a base
+    rating_rdd = string_rdd.map(
+        lambda s: (int(s.split(",")[0]), int(s.split(",")[1]), int(s.split(",")[2])) if len(s.split(",")) > 2 else (
+            int(s.split(",")[0]), int(s.split(",")[1]), -1)).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+
+    return rating_rdd
 
 def q1(spark_context: SparkContext, data_frame: DataFrame):
     # TODO: Implement Q1 here
