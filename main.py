@@ -84,13 +84,35 @@ def q1(spark_context: SparkContext, data_frame: DataFrame):
 
 
 def q2(spark_context: SparkContext, rdd: RDD):
-    return
+
+    # Filter out entries without a rating (-1)
+    rdd_ratings_only = rdd.filter(lambda record: record[2] > 0)
+
+    # Map (userId, songId, rating) to (userId, (1, rating))
+    rdd_ratings_count = rdd_ratings_only.map(lambda record: (record[0], (1, record[2])))
+
+    # Reduce by key to get for each user the # of ratings and the sum of all ratings
+    # I.e. we get (userId, (count, sum_ratings)
+    rdd_ratings_by_user = rdd_ratings_count.reduceByKey(lambda ratings1, ratings2: (ratings1[0] + ratings2[0], ratings1[1] + ratings2[1]))
+
+    # Now filter only those who have given at least 100 ratings
+    rdd_ratings_by_user_at_least100 = rdd_ratings_by_user.filter(lambda user: user[1][0] >= 100)
+
+    # Now map (userId, (count, sum)) to (userId, average_rating)
+    rdd_average_rating_by_user_at_least100 = rdd_ratings_by_user_at_least100.map(lambda r1: (r1[0], r1[1][1] / r1[1][0]))
+
+    # Finally, reduce to find the grumpiest user
+    ans = rdd_average_rating_by_user_at_least100.reduce(lambda r1, r2: r1 if r1[1] < r2[1] else r2)
+
+    print("Q2: ", ans[0], ", ", ans[1])
+
+    return ans
 
 
 def q3(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q3 here
 
-    # Filter out None values
+    # Filter out entries without a rating (-1)
     rdd_ratings_only = rdd.filter(lambda record: record[2] > 0)
 
     # Map every entry (userId, songId, rating) to (userId, ({songId: rating}, rating**2))
@@ -160,7 +182,7 @@ def q3(spark_context: SparkContext, rdd: RDD):
     # Now print all the results
     result = rdd_sim_max.collect()
 
-    [print("Q3: <", sim[0], " ", sim[1][0], " ", round(sim[1][1], 2), ">") for sim in result]
+    [print("Q3: <", sim[0], ", ", sim[1][0], ", ", round(sim[1][1], 2), ">") for sim in result]
 
     # Done with this question, so unpersist this RDD
     rdd_ratings_per_user.unpersist()
@@ -189,9 +211,9 @@ if __name__ == '__main__':
 
     print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=1))
 
-    q2(spark_context, rdd)
+    print("Q2 took: ", timeit(lambda: q2(spark_context, rdd), number=1))
 
-    print("Q3 took: ", timeit(lambda: q3(spark_context, rdd), number=1))
+    #print("Q3 took: ", timeit(lambda: q3(spark_context, rdd), number=1))
 
     q4(spark_context, rdd)
 
