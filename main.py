@@ -195,6 +195,11 @@ def q4(spark_context: SparkContext, rdd: RDD):
     return
 
 
+# Alternative idea:
+# (user1, (user2, user3)), join
+# (user1, (user2, user3), {songs user1}), map
+# (user2, ((user1, {songs user1}), user3)), join
+# (user2, ((user1, {songs user1}), user3)), map
 def q5(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q5 here
 
@@ -276,3 +281,4 @@ if __name__ == '__main__':
     print("Q5 took: ", timeit(lambda:q5(spark_context, rdd), number=1))
 
     spark_context.stop()
+
