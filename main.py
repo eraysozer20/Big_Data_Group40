@@ -197,6 +197,62 @@ def q4(spark_context: SparkContext, rdd: RDD):
 
 def q5(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q5 here
+
+    # Filter out entries without a rating (-1)
+    rdd_ratings_only = rdd.filter(lambda record: record[2] > 0)
+
+    # Map (userId, songId, rating) to (userId, {songId}) (set of rated songs)
+    rdd_rating_counts = rdd_ratings_only.map(lambda r: (r[0], {r[1]}))
+
+    def merge_sets(a, b):
+        if len(a) < len(b):
+            b.update(a)
+            return b
+        else:
+            a.update(b)
+            return a
+
+    # Merge by user to get (userId, {rated songs})
+    rdd_ratings_by_user = rdd_rating_counts.reduceByKey(lambda songs1, songs2: merge_sets(songs1, songs2))
+
+    # Now be smart and remove all users that already have > 7999 ratings
+    # Since each user needs to have at least 1 rating, 7998 + 1 + 1 <= 8000 thus if user a already has  7999 ratings
+    # They cannot be part of a valid triple
+    # Persist since we are going to do a cartesian, so we don't want to recompute during the cartesian
+    rdd_ratings_by_user_pruned = rdd_ratings_by_user.filter(lambda r: len(r[1]) < 7999).persist(storageLevel=StorageLevel.MEMORY_AND_DISK)
+
+    # Why sorting?
+    #sorted_rdd = rddRatingsByUserAtMost8000.sortBy(lambda x: x[0])
+
+    # Cartesian with itself to get user pairs (userId1, {rated songs})(userId2, {rated songs})
+    # Filter to only get userId1 < userId2
+    cartesian_rdd = rdd_ratings_by_user_pruned.cartesian(rdd_ratings_by_user_pruned).filter(lambda pair: pair[0][0] < pair[1][0])
+
+    # Map (userId1, {rated songs})(userId2, {rated songs}) to (userId1, userId2, {rated songs})
+    merged_rdd = cartesian_rdd.map(lambda pair: (pair[0][0], pair[1][0], merge_sets(pair[0][1], pair[1][1])))
+
+    # All three users in a triple need to have at most 8000 songs, thus if user a + b already have >= 8000 songs, they
+    # cannot contribute to a valid triple (the third would at least 1)
+    rdd_ratings_pair_at_most_7999 = merged_rdd.filter(lambda pair: len(pair[2]) < 8000)
+
+    # Now do another cartesian to get triples of users, filter to have user1 < user2 < user3
+    # (userId1, userId2, {rated songs})(userId3, {rated songs})
+    second_cartesian_rdd = rdd_ratings_pair_at_most_7999.cartesian(rdd_ratings_by_user_pruned).filter(lambda triple: triple[0][1] < triple[1][0])
+
+    # second_nonsame_rdd = second_cartesian_rdd.filter(lambda x: x[0][0] != x[1][0]).filter(lambda x: x[0][1] != x[1][0])
+
+    # Map (userId1, userId2, {rated songs})(userId3, {rated songs}) to (userId1, userId2, userId3, total rated songs)
+    rdd_triples = second_cartesian_rdd.map(lambda triple: (triple[0][0], triple[0][1], triple[1][0], len(merge_sets(triple[0][2], triple[1][1]))))
+
+    # Now filter to get only those triples with at most 8000 songs
+    rdd_triples_at_most_8000 = rdd_triples.filter(lambda triple: triple[3] <= 8000)
+
+    # Finally collect the results
+    result = rdd_triples_at_most_8000.collect()
+
+    # Q5: <user1, user2, user3, total_ratings
+    [print("Q5: <", triple[0], ", ", triple[1], ", ", triple[2], ", ", len(triple[3]), ">") for triple in result]
+
     return
 
 
@@ -209,14 +265,14 @@ if __name__ == '__main__':
 
     rdd = q0b(spark_context, on_server)
 
-    print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=1))
+    #print("Q1 took: ", timeit(lambda: q1(spark_context, data_frame), number=1))
 
-    print("Q2 took: ", timeit(lambda: q2(spark_context, rdd), number=1))
+    #print("Q2 took: ", timeit(lambda: q2(spark_context, rdd), number=1))
 
     #print("Q3 took: ", timeit(lambda: q3(spark_context, rdd), number=1))
 
-    q4(spark_context, rdd)
+    #q4(spark_context, rdd)
 
-    q5(spark_context, rdd)
+    print("Q5 took: ", timeit(lambda:q5(spark_context, rdd), number=1))
 
     spark_context.stop()
