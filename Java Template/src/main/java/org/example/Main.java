@@ -47,7 +47,7 @@ public class Main {
             Dataset<Row> df1 = null;
 //        Your code for question 0 goes here
             // Q0b
-            rddRatings = spark.read().textFile(path).javaRDD(); // Load the file at path as a textfile into an RDD
+            rddRatings = sc.textFile(path, 8); // Load the file at path as a textfile into an RDD
 
             // Q0a
             // Define a schema for the values in our text file

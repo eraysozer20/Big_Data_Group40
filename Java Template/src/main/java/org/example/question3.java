@@ -51,7 +51,8 @@ public class question3 {
         JavaPairRDD<Tuple2<Integer, Tuple2<HashMap<Integer, Integer>, Long>>, Tuple2<Integer, Tuple2<HashMap<Integer, Integer>, Long>>> rddCart = rddRatingsPerUser.cartesian(rddRatingsPerUser)
                 .filter((userPair) -> userPair._1()._1() < userPair._2()._1());
 
-        //
+        // Now map (user1,map1)(user2, map2) to (user1, (user2, similarity))
+        // And filter, so we get only those pairs with similarity > 0.95
         JavaPairRDD<Integer, Tuple2<Integer, Double>> rddSim = rddCart.mapToPair((userPair) ->{
             // Get the song maps from each of the users
             Tuple2<HashMap<Integer, Integer>, Long> user1 = userPair._1()._2();
@@ -77,7 +78,7 @@ public class question3 {
 
             // Return <user1, <user2, sim>>
             return new Tuple2<>(userPair._1()._1(), new Tuple2<>(userPair._2()._1(), sim));
-        });
+        }).filter((userPair) -> userPair._2()._2() > 0.95);
 
         // Now reduce by key to get for each user the pair <user2, sim> with maximum similarity score
         // If sim1 > sim2 return user1, if sim1==sim2 return user1 if user1 < user2, otherwise return user2
