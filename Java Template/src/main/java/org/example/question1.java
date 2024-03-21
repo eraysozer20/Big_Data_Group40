@@ -9,11 +9,17 @@ public class question1 {
         long ans=0;
         // Your code goes here
         // Temporary table that maps string to user, song, rating
-        df1.createOrReplaceTempView("ratings");
-        // SELECT only rows that have rating not null
-        // THEN SELECT users such that COUNT(rating) >= 100, GROUP BY user
-        // THEN SELECT COUNT(DISTINCT user) WHERE AVG(rating) < 2 GROUP BY user
-        ans = spark.sql("SELECT user, COUNT(user) AS total_ratings, AVG(rating) as avg_rating FROM ratings WHERE rating IS NOT NULL GROUP BY USER HAVING total_ratings >= 100 AND avg_rating < 2").count();
+        df1.createOrReplaceTempView("ratings_table");
+        // Need to grab only the user
+        // Need to consider only rows with actual rating, > 0
+        // Need on a per-user basis -> need to group by user
+        // Need that # of ratings >= 100 and that avg rating < 2
+        // Finally only need the # of users that satisfy this query
+        ans = spark.sql("SELECT userId " +
+                                "FROM ratings_table " +
+                                "WHERE rating > 0 " +
+                                "GROUP BY userId " +
+                                "HAVING COUNT(songId) >= 100 AND AVG(rating) < 2").count();
 
         return ans;
     }
