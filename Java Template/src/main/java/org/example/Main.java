@@ -12,6 +12,7 @@ import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.sparkproject.guava.base.Functions;
 import scala.Tuple2;
 import org.apache.spark.sql.Dataset;
 import scala.Tuple3;
@@ -45,38 +46,26 @@ public class Main {
             JavaRDD<String> rddRatings = null;
             Dataset<Row> df1 = null;
 //        Your code for question 0 goes here
+            // Q0b
             rddRatings = spark.read().textFile(path).javaRDD(); // Load the file at path as a textfile into an RDD
-            //df1 = spark.createDataFrame(rddRatings, String.class); // Create a dataframe from the RDD
 
-            // ******
-
-            // The schema is encoded in a string
-            String schemaString = "user song rating";
-
-            // Generate the schema based on the string of schema
+            // Q0a
+            // Define a schema for the values in our text file
             List<StructField> fields = new ArrayList<>();
-            for (String fieldName : schemaString.split(" ")) {
-                StructField field = DataTypes.createStructField(fieldName, DataTypes.StringType, true);
-                fields.add(field);
-            }
+            fields.add(DataTypes.createStructField("userId", DataTypes.IntegerType, true));
+            fields.add(DataTypes.createStructField("songId", DataTypes.IntegerType, true));
+            fields.add(DataTypes.createStructField("rating", DataTypes.IntegerType, true));
             StructType schema = DataTypes.createStructType(fields);
 
-            // Convert records of the RDD (people) to Rows
+            // Convert the string into a (userId, songId, rating) row
+            // If there was no rating, set it to -1
             JavaRDD<Row> rowRDD = rddRatings.map((Function<String, Row>) record -> {
-                String[] attributes = record.split(",");
-
-                if(attributes.length < 3)
-                    return RowFactory.create(attributes[0], attributes[1], "");
-                else
-                    return RowFactory.create(attributes[0], attributes[1], attributes[2]);
+                String[] ratingSplit = record.split(",");
+                return RowFactory.create(Integer.parseInt(ratingSplit[0]), Integer.parseInt(ratingSplit[1]), ratingSplit.length > 2 ? Integer.parseInt(ratingSplit[2]): -1);
             });
 
-            // Apply the schema to the RDD
+            // Convert the RDD into a dataframe using the schema
             df1 = spark.createDataFrame(rowRDD, schema);
-
-            // ******
-            //df1 = spark.read().textFile(path).toDF(); // Load the file at path as a textfile into a Dataframe
-            df1.show();
             // Question 0 END
 
             long startTime = System.currentTimeMillis();
