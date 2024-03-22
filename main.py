@@ -242,44 +242,54 @@ def q3_alt(spark_context: SparkContext, rdd: RDD):
 
 def q4(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q4 here
-    # Stream S -> RDD
-    # Hash functions map M -> M^k with k >= 2
-    #
-    #
+    # 
 
-    def lsb(x):
-        return (x & -x).bit_length() - 1
+    import random
 
-    M = 2**31
+    def is_prime(n):
+    #Check if a number is prime.
+        if n <= 1:
+            return False
+        for i in range(2, int(math.sqrt(n)) + 1):
+            if n % i == 0:
+                return False
+        return True
+
+
+    M = 2**31 - 1  # Use a large prime as M
     epsilon = 0.1
     delta = 0.1
+    r = int(math.ceil(1 / epsilon**2 * math.log2(1 / delta)))
+    p = next(i for i in range(M, 2**32) if is_prime(i))  # Find a prime larger than M for hash modulus
+    
+    # Generate r pairwise independent hash functions
+    hashes = [(random.randint(1, p - 1), random.randint(1, p - 1)) for _ in range(r)]
 
-    r = int(math.ceil(1/epsilon**2*math.log2(1/delta)))
+    # Initialize sketches
+    logM = int(math.ceil(math.log2(M)))
+    sketches = [[0] * logM for _ in range(r)]
 
-    # Hash function: ((ax + b)%c)%m
-    hashes = []
-    a_primes = [i for i in range(2**29, 2**31) if math.(i)]
-    for i in range(0, r):
+    def hash_element(x, a, b, p, m):
+        #Compute hash value of element x using hash function h_{a, b}(x) = ((a * x + b) % p) % m
+        return ((a * x + b) % p) % m
 
+    def process_element(x):
+        # Process each element in the RDD and update sketches
+        for i, (a, b) in enumerate(hashes):
+            v = hash_element(x[1], a, b, p, M)
+            lsb_index = (v & -v).bit_length() - 1
+            if lsb_index < len(sketches[i]):
+                sketches[i][lsb_index] = 1
 
-    # initialize, create empty bit sketches
-    sketches = [0]*r
+    # Apply hash functions to each element in the RDD
+    rdd.foreach(process_element)
 
-    # SOmething for element in S
-    # Now for each hash function
-    for i in range(0, r):
-        v = 0  # Hash the element
-        sketches[i] |= 1 << lsb(v)
-
-    zero_sum = 0
-    for i in range(0, r):
-        left_most = -1
-        for m in range(int(math.log2(M) - 1), 0):
-            if (sketches[i] & (1 << m)) == 0:
-                left_most = m
-        zero_sum += left_most
-
-    R = 1.2928 * 2**(zero_sum/r)
+    # Estimate cardinality
+    sum_zeroes = 0
+    for sketch in sketches:
+        leftmost_zero = next((i for i, bit in enumerate(sketch) if bit == 0), logM)
+        sum_zeroes += leftmost_zero
+    R = 1.2928 * (2 ** (sum_zeroes / r))
 
     return R
 
