@@ -110,153 +110,6 @@ def q4(spark_context: SparkContext, rdd: RDD):
     # TODO: Implement Q4 here
     return
 
-''' First Try
-<<<<<<< Updated upstream
-def q5(spark_context: SparkContext, rdd: RDD):
-
-    #print(str(rddRatingsAsTuples.count()))
-    rddActualRatingsAsTuples = rdd.filter(lambda record: record[2] is not None)
-    print("debug2")
-    #print(str(rddActualRatingsAsTuples.count()))
-    rddRatingCounts = rddActualRatingsAsTuples.map(lambda r: (r[0], 1))
-    print("debug3")
-    #print(str(rddRatingCounts.count()))
-    rddRatingsByUser = rddRatingCounts.reduceByKey(lambda a,b: a+b)
-    print("debug4")
-    #print(str(rddRatingsByUser.count()))
-    #print(rddRatingsByUser.collect())
-    rddRatingsByUserAtMost8000 = rddRatingsByUser.filter(lambda r: r[1] <= 8000)
-    print("debug5")
-    #print(str(rddRatingsByUserAtMost8000.count()))
-    #print(rddRatingsByUserAtMost8000.collect())
-    rddSorted = rddRatingsByUserAtMost8000.sortBy(lambda x: x[1])
-    print("debug6")
-    count = int(rddSorted.count())
-    #print(count)
-    #print(rddSorted.collect())
-    print("debug7")
-    rddSortedUserIDs = rddSorted.map(lambda x: x[0])
-    CollectedUserIDs = rddSortedUserIDs.collect()
-
-    rddSortedValues = rddSorted.map(lambda x: x[1])
-    CollectedValues = rddSortedValues.collect()
-
-    matr = []
-    arr = []
-
-    print("debug8")
-    for i in range(0,count):
-        for j in range(i+1,count):
-            if CollectedValues[i]*2 + CollectedValues[j] <= 8000:
-                for k in range(j+1,count):
-                    if CollectedValues[i] + CollectedValues[j] + CollectedValues[k] <= 8000:
-                        arr = [CollectedUserIDs[i],CollectedUserIDs[j],CollectedUserIDs[k],CollectedValues[i] + CollectedValues[j] + CollectedValues[k]]
-                        matr.append(arr)
-                    else:
-                        break
-            else:
-                break
-    print("debug9")
-
-    print('Q5: ')
-    print(matr)
-
-    return
-'''
-def q5(spark_context: SparkContext, rdd: RDD):
-    # TODO: Implement Q5 here
-    
-    rddActualRatingsAsTuples = rdd.filter(lambda record: record[2] is not None)
-
-    rddRatingCounts = rddActualRatingsAsTuples.map(lambda r: (r[0], [r[1]]))
-
-    rddRatingsByUser = rddRatingCounts.reduceByKey(lambda a,b: a+b)
-
-    rddRatingsByUserAtMost8000 = rddRatingsByUser.filter(lambda r: len(r[1]) <= 8000)
-
-    sorted_rdd = rddRatingsByUserAtMost8000.sortBy(lambda x: x[0])
-   
-    cartesian_rdd = sorted_rdd.cartesian(sorted_rdd)
-
-    nonsame_rdd = cartesian_rdd.filter(lambda x: x[0][0] < x[1][0])
-    print("debug0")
-
-    merged_rdd = nonsame_rdd.map(lambda x: ((x[0][0], x[1][0]), (x[0][1] + x[1][1])))
-    print("debug1")
-    filtered_rdd = merged_rdd.mapValues(lambda x: list(set(x)))
-
-    #print(filtered_rdd.take(2))
-    print("debug2")
-    rddRatingsByTwoUsersAtMost8000 = filtered_rdd.filter(lambda r: len(r[1]) <= 8000)
-    print("debug2.5")
-    print(rddRatingsByTwoUsersAtMost8000.take(1))
-    
-    print("debug3")
-    second_cartesian_rdd = rddRatingsByTwoUsersAtMost8000.cartesian(rddRatingsByUserAtMost8000)
-    print("debug4")
-    second_nonsame_rdd = second_cartesian_rdd.filter(lambda x: x[0][0] != x[1][0]).filter(lambda x: x[0][1] != x[1][0])
-    print("debug5")
-    second_merged_rdd = second_nonsame_rdd.map(lambda x: ((x[0][0][0], x[0][0][1], x[1][0]), (x[0][1] + x[1][1])))
-    print("debug6")
-    second_filtered_rdd = second_merged_rdd.mapValues(lambda x: list(set(x)))
-    print("debug7")
-    rddRatingsByThreeUsersAtMost8000 = second_filtered_rdd.filter(lambda r: len(r[1]) <= 8000)
-    print("debug8")
-    result = rddRatingsByThreeUsersAtMost8000.map(lambda x: ((x[0][0], x[0][1], x[0][2], len(x[1]))))
-    #print(result.collect())
-=======
-def q5(spark_context: SparkContext, rdd: RDD):
-
-    #print(str(rddRatingsAsTuples.count()))
-    rddActualRatingsAsTuples = rdd.filter(lambda record: record[2] is not None)
-    print("debug2")
-    #print(str(rddActualRatingsAsTuples.count()))
-    rddRatingCounts = rddActualRatingsAsTuples.map(lambda r: (r[0], 1))
-    print("debug3")
-    #print(str(rddRatingCounts.count()))
-    rddRatingsByUser = rddRatingCounts.reduceByKey(lambda a,b: a+b)
-    print("debug4")
-    #print(str(rddRatingsByUser.count()))
-    #print(rddRatingsByUser.collect())
-    rddRatingsByUserAtMost8000 = rddRatingsByUser.filter(lambda r: r[1] <= 8000)
-    print("debug5")
-    #print(str(rddRatingsByUserAtMost8000.count()))
-    #print(rddRatingsByUserAtMost8000.collect())
-    rddSorted = rddRatingsByUserAtMost8000.sortBy(lambda x: x[1])
-    print("debug6")
-    count = int(rddSorted.count())
-    #print(count)
-    #print(rddSorted.collect())
-    print("debug7")
-    rddSortedUserIDs = rddSorted.map(lambda x: x[0])
-    CollectedUserIDs = rddSortedUserIDs.collect()
-
-    rddSortedValues = rddSorted.map(lambda x: x[1])
-    CollectedValues = rddSortedValues.collect()
-
-    matr = []
-    arr = []
-
-    print("debug8")
-    for i in range(0,count):
-        for j in range(i+1,count):
-            if CollectedValues[i]*2 + CollectedValues[j] <= 8000:
-                for k in range(j+1,count):
-                    if CollectedValues[i] + CollectedValues[j] + CollectedValues[k] <= 8000:
-                        arr = [CollectedUserIDs[i],CollectedUserIDs[j],CollectedUserIDs[k],CollectedValues[i] + CollectedValues[j] + CollectedValues[k]]
-                        matr.append(arr)
-                    else:
-                        break
-            else:
-                break
-    print("debug9")
-
-    print('Q5: ')
-    print(matr)
->>>>>>> Stashed changes
-
-    return
-'''
 def q5(spark_context: SparkContext, rdd: RDD):
 
     # Filter out records with non-null ratings
@@ -278,35 +131,30 @@ def q5(spark_context: SparkContext, rdd: RDD):
     cartesian_rdd = sorted_user_rdd.cartesian(sorted_user_rdd).filter(lambda x: x[0] < x[1])
     # ((user1, user2))(user3)
     double_cartesian_rdd = cartesian_rdd.cartesian(sorted_user_rdd).filter(lambda x: x[0][1] < x[1])
-    print("ananin ami")
+
     # Map to calculate total RDD
-    #confuse_rdd = double_cartesian_rdd.map(lambda x:((x[0][0], (x[0][0], x[0][1], x[1])), (x[0][1], (x[0][0], x[0][1], x[1])), (x[1], (x[0][0], x[0][1], x[1]))))#.join(rddRatingsByUserAtMost8000)
-    confuse_rdd = double_cartesian_rdd.map(lambda x:(x[0][0], (x[0][1], x[1])))#.join(rddRatingsByUserAtMost8000)
+    join1_rdd = double_cartesian_rdd.map(lambda x:(x[0][0], (x[0][1], x[1]))).join(rddRatingsByUserAtMost8000)
+    '''
     print(confuse_rdd.take(2))
-    rdd2 = spark_context.parallelize([(0, (1, 2)), (0, (1, 3))])
+    #rdd2 = spark_context.parallelize([(0, (1, 2)), (0, (1, 3))])
+    rdd2 = spark_context.parallelize([(0, ((1, 2), [10604, 26290]))])
     confuse_rdd_join = rdd2.join(rddRatingsByUserAtMost8000)
     print(confuse_rdd_join.collect())
-    confuse1_rdd = confuse_rdd.map(lambda x:(x[1][0], (x[0], x[1][1], x[1][2]))).join(rddRatingsByUserAtMost8000)
-    confuse2_rdd = confuse1_rdd.map(lambda x:(x[1][1], (x[0], x[0][1], x[1][2]+x[1][3]))).join(rddRatingsByUserAtMost8000)
-    print(confuse2_rdd.take(2))
-    total_rdd = confuse2_rdd.map(lambda x: ((x[0], x[1][0], x[1][1]), list(set(x[1][2])+set(x[1][3]))))
-    result = total_rdd.filter(lambda r: len(r[1]) <= 8000)
+    [(0, ((1, 2), [10604, 26290, ...]))]
+    [(1, (0, 2, [10604, 26290, ...]))]
+    [(1, ((0, 2, [10604, 26290, ...]))())]
+    [(1, ((0, 2, [10604, 26290, ...]), ([x, y, ...])))]
+    x[1][0] = (0, 2, [10604, 26290, ...])
+    x[1][1] = ([x, y, ...])
+    '''
+    join2_rdd = join1_rdd.map(lambda x:(x[1][0][0], (x[0], x[1][0][1], x[1][1]))).join(rddRatingsByUserAtMost8000)
+    #[(1, ((0, 2, [10604, 26290, ...]), ([10604, 26290, ...])))]
+    join3_rdd = join2_rdd.map(lambda x:(x[1][0][1], (x[0], x[1][0][0], x[1][0][2]+x[1][1]))).join(rddRatingsByUserAtMost8000)
+    print(join2_rdd.take(2))
+    total_rdd = join2_rdd.map(lambda x: ((x[1][0][1], x[1][0][0], x[0], list(set(x[1][0][2])+set(x[1][1])))))
+    result = total_rdd.filter(lambda r: len(r[3]) <= 8000)
     print(result.collect())
 
-    '''
-    flattened_rdd = confuse_rdd.flatMap(lambda x: x).map(lambda x: (x[0], x[1]))
-    print(flattened_rdd.take(2))
-    print("erenin anasinin ami")
-    total_rdd = confuse_rdd.map(lambda x: (x[1][0], x[1][1])).reduceByKey(lambda x, y: x + y)
-    print(total_rdd.take(2))
-    # Map values to remove duplicates
-    distinct_rdd = total_rdd.mapValues(lambda x: list(set(x)))
-
-    # Filter result with at most 8000 ratings
-    result = distinct_rdd.filter(lambda r: len(r[1]) <= 8000)
-
-    print(result.collect())
-    '''
     return result
 
 
