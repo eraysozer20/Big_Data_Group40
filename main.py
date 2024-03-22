@@ -151,7 +151,7 @@ def q5(spark_context: SparkContext, rdd: RDD):
     #[(1, ((0, 2, [10604, 26290, ...]), ([10604, 26290, ...])))]
     join3_rdd = join2_rdd.map(lambda x:(x[1][0][1], (x[0], x[1][0][0], x[1][0][2]+x[1][1]))).join(rddRatingsByUserAtMost8000)
     print(join2_rdd.take(2))
-    total_rdd = join2_rdd.map(lambda x: ((x[1][0][1], x[1][0][0], x[0], list(set(x[1][0][2])+set(x[1][1])))))
+    total_rdd = join3_rdd.map(lambda x: ((x[1][0][1], x[1][0][0], x[0], list(set(x[1][0][2])+set(x[1][1])))))
     result = total_rdd.filter(lambda r: len(r[3]) <= 8000)
     print(result.collect())
 
