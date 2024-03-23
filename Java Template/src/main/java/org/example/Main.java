@@ -70,23 +70,23 @@ public class Main {
 
             long startTime = System.currentTimeMillis();
             long endTime;
-            long ans1 = question1.solution(spark, df1);
-            System.out.println(">> Q1: " + ans1);
-            endTime = System.currentTimeMillis();
-            System.out.println("Q1 time: " + (endTime - startTime) + "ms");
-
-            startTime = System.currentTimeMillis();
-            Tuple2<Integer, Float> ans2 = question2.solution(spark, rddRatings);
-            System.out.println(">> Q2: " + ans2._1 + ", " + ans2._2);
-            endTime = System.currentTimeMillis();
-            System.out.println("Q2 time: " + (endTime - startTime) + "ms");
-
-            startTime = System.currentTimeMillis();
-            for (Tuple3<Integer, Integer, Double> t : question3.solution(spark, rddRatings)) {
-                System.out.println(">> Q3: <" + t._1() + ", " + t._2() + ", " + Precision.round(t._3(), 2) + ">");
-            }
-            endTime = System.currentTimeMillis();
-            System.out.println("Q3 time: " + (endTime - startTime) + "ms");
+//            long ans1 = question1.solution(spark, df1);
+//            System.out.println(">> Q1: " + ans1);
+//            endTime = System.currentTimeMillis();
+//            System.out.println("Q1 time: " + (endTime - startTime) + "ms");
+//
+//            startTime = System.currentTimeMillis();
+//            Tuple2<Integer, Float> ans2 = question2.solution(spark, rddRatings);
+//            System.out.println(">> Q2: " + ans2._1 + ", " + ans2._2);
+//            endTime = System.currentTimeMillis();
+//            System.out.println("Q2 time: " + (endTime - startTime) + "ms");
+//
+//            startTime = System.currentTimeMillis();
+//            for (Tuple3<Integer, Integer, Double> t : question3.solution(spark, rddRatings)) {
+//                System.out.println(">> Q3: <" + t._1() + ", " + t._2() + ", " + Precision.round(t._3(), 2) + ">");
+//            }
+//            endTime = System.currentTimeMillis();
+//            System.out.println("Q3 time: " + (endTime - startTime) + "ms");
 
             startTime = System.currentTimeMillis();
             System.out.println(">> Q4: " + question4.estimate(spark, rddRatings));

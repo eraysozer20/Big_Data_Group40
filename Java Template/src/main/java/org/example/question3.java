@@ -86,13 +86,11 @@ public class question3 {
                 sim1._2() > sim2._2() ? sim1 : (Objects.equals(sim1._2(), sim2._2()) ?
                         (sim1._1() < sim2._1() ? sim1 : sim2) : sim2));
 
-        // Finally, map to <user1, user2, similarity>
-        JavaRDD<Tuple3<Integer, Integer, Double>> rddSimMaxRounded = rddSimMax.map((sim) ->
-                new Tuple3<>(sim._1(), sim._2()._1(), sim._2()._2()));
+        // Finally, map to <user1, user2, similarity> and collect the results
+        ans = rddSimMax.map((sim) ->
+                new Tuple3<>(sim._1(), sim._2()._1(), sim._2()._2())).collect();
 
-        // Now collect the results
-        ans = rddSimMaxRounded.collect();
-
+        // Now unpersist rddRatingsPerUser since we no longer need it
         rddRatingsPerUser.unpersist();
 
         return ans;

@@ -15,11 +15,11 @@ public class question1 {
         // Need on a per-user basis -> need to group by user
         // Need that # of ratings >= 100 and that avg rating < 2
         // Finally only need the # of users that satisfy this query
-        ans = spark.sql("SELECT userId " +
+        spark.sql("EXPLAIN SELECT userId " +
                                 "FROM ratings_table " +
                                 "WHERE rating > 0 " +
                                 "GROUP BY userId " +
-                                "HAVING COUNT(songId) >= 100 AND AVG(rating) < 2").count();
+                                "HAVING COUNT(songId) >= 100 AND AVG(rating) < 2").explain("EXTENDED");
 
         return ans;
     }
