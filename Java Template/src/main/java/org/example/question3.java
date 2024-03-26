@@ -21,7 +21,6 @@ public class question3 {
     public static List<Tuple3<Integer, Integer, Double>> solution(SparkSession spark, JavaRDD<String> rddRatings) {
         List<Tuple3<Integer, Integer, Double>> ans = null;
         // your code goes here
-
         // Start with a string in the form of user,song,(rating)
         // First map to a Tuple3 of the form user (int), song (int), rating/-1
         JavaRDD<Tuple3<Integer, Integer, Integer>> rddRatingsAsTuples = rddRatings.map(s -> {
@@ -29,20 +28,20 @@ public class question3 {
             return new Tuple3<>(Integer.parseInt(cut[0]), Integer.parseInt(cut[1]), cut.length == 3 ? Integer.parseInt(cut[2]) : -1);
         });
         // Remove all entries that did not have a proper rating
-        JavaRDD<Tuple3<Integer,Integer,Integer>> rddActualRatingsAsTuples = rddRatingsAsTuples.filter(r -> r._3() > 0);
+        JavaRDD<Tuple3<Integer, Integer, Integer>> rddActualRatingsAsTuples = rddRatingsAsTuples.filter(r -> r._3() > 0);
         // Now we have a rdd with user (int), song (int), rating (int)
 
         // Map every entry <userId, songId, rating> to a pair <userId, <map(song), rating^2>>
         JavaPairRDD<Integer, Tuple2<HashMap<Integer, Integer>, Long>> rddRatingsAsMaps = rddActualRatingsAsTuples.mapToPair((tuple) -> {
-            HashMap<Integer, Integer> ratingList = new HashMap<>();
-            ratingList.put(tuple._2(), tuple._3());
-            return new Tuple2<>(tuple._1(), new Tuple2<>(ratingList, (long) tuple._3()* tuple._3()));
+            HashMap<Integer, Integer> ratingMap = new HashMap<>();
+            ratingMap.put(tuple._2(), tuple._3());
+            return new Tuple2<>(tuple._1(), new Tuple2<>(ratingMap, (long) tuple._3() * tuple._3()));
         });
 
         // Reduce by key, i.e. merge the hashmaps such that for each user we get a map song:rating for all songs that
         // the user rated and sum the ratings^2
         // Also persist this RDD, since we are going to do a cartesian with itself, and don't want to recompute it
-        JavaPairRDD<Integer, Tuple2<HashMap<Integer, Integer>, Long>> rddRatingsPerUser = rddRatingsAsMaps.reduceByKey((ratings1, ratings2) ->{
+        JavaPairRDD<Integer, Tuple2<HashMap<Integer, Integer>, Long>> rddRatingsPerUser = rddRatingsAsMaps.reduceByKey((ratings1, ratings2) -> {
             ratings1._1().putAll(ratings2._1());
             return new Tuple2<>(ratings1._1(), ratings1._2() + ratings2._2());
         }).persist(StorageLevel.MEMORY_AND_DISK());
@@ -53,13 +52,13 @@ public class question3 {
 
         // Now map (user1,map1)(user2, map2) to (user1, (user2, similarity))
         // And filter, so we get only those pairs with similarity > 0.95
-        JavaPairRDD<Integer, Tuple2<Integer, Double>> rddSim = rddCart.mapToPair((userPair) ->{
+        JavaPairRDD<Integer, Tuple2<Integer, Double>> rddSim = rddCart.mapToPair((userPair) -> {
             // Get the song maps from each of the users
             Tuple2<HashMap<Integer, Integer>, Long> user1 = userPair._1()._2();
             Tuple2<HashMap<Integer, Integer>, Long> user2 = userPair._2()._2();
 
             // Find the user with the fewest rated songs
-            if(user1._1().keySet().size() > user2._1().keySet().size()){
+            if (user1._1().keySet().size() > user2._1().keySet().size()) {
                 Tuple2<HashMap<Integer, Integer>, Long> temp = user1;
                 user1 = user2;
                 user2 = temp;
@@ -67,14 +66,14 @@ public class question3 {
 
             // Calculate sum (a*b) with a: rating user1, b: rating user2 for all songs in common
             long rating_sum = 0;
-            for(Map.Entry<Integer, Integer> rating : user1._1().entrySet()){
-                if(user2._1().containsKey(rating.getKey())){
+            for (Map.Entry<Integer, Integer> rating : user1._1().entrySet()) {
+                if (user2._1().containsKey(rating.getKey())) {
                     rating_sum += (long) rating.getValue() * user2._1().get(rating.getKey());
                 }
             }
 
             // Calculate the similarity
-            double sim = rating_sum/(Math.sqrt(user1._2())*Math.sqrt(user2._2()));
+            double sim = rating_sum / (Math.sqrt(user1._2()) * Math.sqrt(user2._2()));
 
             // Return <user1, <user2, sim>>
             return new Tuple2<>(userPair._1()._1(), new Tuple2<>(userPair._2()._1(), sim));

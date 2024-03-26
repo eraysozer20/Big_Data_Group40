@@ -28,7 +28,7 @@ public class Main {
         Logger.getLogger("akka").setLevel(Level.OFF);
         Logger.getRootLogger().setLevel(Level.OFF);
 
-        boolean onServer = false; // TODO: Set this to true if and only if building a JAR to run on the server
+        boolean onServer = true; // TODO: Set this to true if and only if building a JAR to run on the server
 
         SparkConf conf = new SparkConf()
                 .setAppName(Main.class.getName());
@@ -47,7 +47,8 @@ public class Main {
             Dataset<Row> df1 = null;
 //        Your code for question 0 goes here
             // Q0b
-            rddRatings = sc.textFile(path, 8); // Load the file at path as a textfile into an RDD
+            // Load the file at path as a textfile into an RDD and set the minimum number of partitions
+            rddRatings = sc.textFile(path, 40);
 
             // Q0a
             // Define a schema for the values in our text file
@@ -70,23 +71,23 @@ public class Main {
 
             long startTime = System.currentTimeMillis();
             long endTime;
-//            long ans1 = question1.solution(spark, df1);
-//            System.out.println(">> Q1: " + ans1);
-//            endTime = System.currentTimeMillis();
-//            System.out.println("Q1 time: " + (endTime - startTime) + "ms");
-//
-//            startTime = System.currentTimeMillis();
-//            Tuple2<Integer, Float> ans2 = question2.solution(spark, rddRatings);
-//            System.out.println(">> Q2: " + ans2._1 + ", " + ans2._2);
-//            endTime = System.currentTimeMillis();
-//            System.out.println("Q2 time: " + (endTime - startTime) + "ms");
-//
-//            startTime = System.currentTimeMillis();
-//            for (Tuple3<Integer, Integer, Double> t : question3.solution(spark, rddRatings)) {
-//                System.out.println(">> Q3: <" + t._1() + ", " + t._2() + ", " + Precision.round(t._3(), 2) + ">");
-//            }
-//            endTime = System.currentTimeMillis();
-//            System.out.println("Q3 time: " + (endTime - startTime) + "ms");
+            long ans1 = question1.solution(spark, df1);
+            System.out.println(">> Q1: " + ans1);
+            endTime = System.currentTimeMillis();
+            System.out.println("Q1 time: " + (endTime - startTime) + "ms");
+
+            startTime = System.currentTimeMillis();
+            Tuple2<Integer, Float> ans2 = question2.solution(spark, rddRatings);
+            System.out.println(">> Q2: " + ans2._1 + ", " + ans2._2);
+            endTime = System.currentTimeMillis();
+            System.out.println("Q2 time: " + (endTime - startTime) + "ms");
+
+            startTime = System.currentTimeMillis();
+            for (Tuple3<Integer, Integer, Double> t : question3.solution(spark, rddRatings)) {
+                System.out.println(">> Q3: <" + t._1() + ", " + t._2() + ", " + Precision.round(t._3(), 2) + ">");
+            }
+            endTime = System.currentTimeMillis();
+            System.out.println("Q3 time: " + (endTime - startTime) + "ms");
 
             startTime = System.currentTimeMillis();
             System.out.println(">> Q4: " + question4.estimate(spark, rddRatings));
