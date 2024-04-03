@@ -28,7 +28,7 @@ public class Main {
         Logger.getLogger("akka").setLevel(Level.OFF);
         Logger.getRootLogger().setLevel(Level.OFF);
 
-        boolean onServer = true; // TODO: Set this to true if and only if building a JAR to run on the server
+        boolean onServer = false; // TODO: Set this to true if and only if building a JAR to run on the server
 
         SparkConf conf = new SparkConf()
                 .setAppName(Main.class.getName());
@@ -48,7 +48,7 @@ public class Main {
 //        Your code for question 0 goes here
             // Q0b
             // Load the file at path as a textfile into an RDD and set the minimum number of partitions
-            rddRatings = sc.textFile(path, 40);
+            rddRatings = sc.textFile(path);
 
             // Q0a
             // Define a schema for the values in our text file
